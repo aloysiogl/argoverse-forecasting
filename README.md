@@ -20,7 +20,12 @@
 
 ## Installation
 
-Requires Linux, git, and Python 3.6+
+Requires Linux, git, and Python 3.6+ (keep with Python 3.6)
+
+### Personal install notes
+- Use python 3.7
+- Needed to run `pip install -U pip setuptools` to get the api package to work.
+
 
 ### 1) Setup Argoverse API
 
