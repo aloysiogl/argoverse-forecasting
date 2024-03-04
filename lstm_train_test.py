@@ -370,7 +370,8 @@ def validate(
         # Encode observed trajectory
         for ei in range(input_length):
             encoder_input = _input[:, ei, :]
-            encoder_hidden = encoder(encoder_input, encoder_hidden)
+            with torch.no_grad():
+                encoder_hidden = encoder(encoder_input, encoder_hidden)
 
         # Initialize decoder input with last coordinate in encoder
         decoder_input = encoder_input[:, :2]
@@ -382,8 +383,9 @@ def validate(
 
         # Decode hidden state in future trajectory
         for di in range(output_length):
-            decoder_output, decoder_hidden = decoder(decoder_input,
-                                                     decoder_hidden)
+            with torch.no_grad():
+                decoder_output, decoder_hidden = decoder(decoder_input,
+                                                        decoder_hidden)
             decoder_outputs[:, di, :] = decoder_output
 
             # Update losses for all benchmarks
@@ -402,6 +404,11 @@ def validate(
                 f"Val -- Epoch:{epoch}, loss:{loss}, Rollout: {rollout_len}",
                 color="green",
             )
+        # del decoder_input
+        # del encoder_input
+        # del decoder_hidden
+        # del encoder_hidden 
+        # torch.cuda.empty_cache()
 
     # Save
     val_loss = sum(total_loss) / len(total_loss)
