@@ -25,6 +25,8 @@ Requires Linux, git, and Python 3.6+ (keep with Python 3.6)
 ### Personal install notes
 - Use python 3.7
 - Needed to run `pip install -U pip setuptools` to get the api package to work.
+- Use new tensorflow version (2.7) and ensure cuda is 11.2
+- Had to change the pytorch version to 1.12.1 and run `conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=11.3 -c pytorch`
 
 
 ### 1) Setup Argoverse API
