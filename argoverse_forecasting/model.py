@@ -1,13 +1,16 @@
+import os
 from typing import Any, Dict
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 import argoverse_forecasting.utils.baseline_config as config
 
-from .utils.lstm_utils import ModelUtils, LSTMDataset
 from .utils import baseline_utils
+from .utils.lstm_utils import LSTMDataset, ModelUtils
+from .features import xy_to_features
 
 
 class EncoderRNN(nn.Module):
@@ -147,7 +150,6 @@ def infer_absolute(
     else:
         device = torch.device("cpu")
 
-
     for i, (_input, target, helpers) in enumerate(test_loader):
         _input = _input.to(device)
 
@@ -213,3 +215,86 @@ def infer_absolute(
             forecasted_trajectories[seq_id] = [abs_outputs[i]]
 
     return forecasted_trajectories
+
+
+class LSTMForecaster:
+    def __init__(self, model_path: str, obs_len: int = 20, pred_len: int = 30):
+        self.args = type(
+            "",
+            (),
+            {
+                "normalize": True,
+                "use_map": False,
+                "use_social": False,
+                "use_delta": True,
+                "obs_len": obs_len,
+                "pred_len": pred_len,
+                "test_features": True,
+                "test_batch_size": 1,
+                "train_features": False,
+                "val_features": False,
+                "lr": 0.001,
+            },
+        )()
+
+        if not baseline_utils.validate_args(self.args):
+            print("Invalid args")
+            exit(1)
+
+        self.baseline_key = "none"
+
+        self.use_cuda = torch.cuda.is_available()
+        if self.use_cuda:
+            self.device = torch.device("cuda")
+        else:
+            self.device = torch.device("cpu")
+
+        if self.use_cuda:
+            print(f"Using all ({torch.cuda.device_count()}) GPUs...")
+
+        self.model_utils = ModelUtils()
+
+        self.load_model(model_path)
+
+    def load_model(self, model_path: str):
+        criterion = nn.MSELoss()
+        self.encoder = EncoderRNN(
+            input_size=len(baseline_utils.BASELINE_INPUT_FEATURES[self.baseline_key])
+        )
+        self.decoder = DecoderRNN(output_size=2)
+        if self.use_cuda:
+            self.encoder = nn.DataParallel(self.encoder)
+            self.decoder = nn.DataParallel(self.decoder)
+
+        self.encoder.to(self.device)
+        self.decoder.to(self.device)
+
+        encoder_optimizer = torch.optim.Adam(self.encoder.parameters(), lr=self.args.lr)
+        decoder_optimizer = torch.optim.Adam(self.decoder.parameters(), lr=self.args.lr)
+
+        # If model_path provided, resume from saved checkpoint
+        if os.path.isfile(model_path):
+            print("Loading model")
+            self.model_utils.load_checkpoint(
+                model_path,
+                self.encoder,
+                self.decoder,
+                encoder_optimizer,
+                decoder_optimizer,
+            )
+        else:
+            raise ValueError("Model path not found")
+
+    def predict(self, trajectory: np.ndarray) -> np.ndarray:
+        """
+        Predict the future trajectory given x, y coordinates.
+        """
+
+        feature_sequence = xy_to_features(trajectory)
+
+        data_dict = baseline_utils.get_data(self.args, self.baseline_key, feature_sequence)
+
+        return infer_single_none(
+            data_dict, 0, self.encoder, self.decoder, self.model_utils, self.args
+        )
+
