@@ -8,7 +8,7 @@ import torch
 from torch.autograd import Variable
 from torch.utils.data import Dataset
 
-import utils.baseline_config as config
+import argoverse_forecasting.utils.baseline_config as config
 
 use_cuda = torch.cuda.is_available()
 if use_cuda:
@@ -19,6 +19,7 @@ else:
 
 class LSTMDataset(Dataset):
     """PyTorch Dataset for LSTM Baselines."""
+
     def __init__(self, data_dict: Dict[str, Any], args: Any, mode: str):
         """Initialize the Dataset.
 
@@ -51,21 +52,23 @@ class LSTMDataset(Dataset):
         """
         return self.data_size
 
-    def __getitem__(self, idx: int
-                    ) -> Tuple[torch.FloatTensor, Any, Dict[str, np.ndarray]]:
+    def __getitem__(
+        self, idx: int
+    ) -> Tuple[torch.FloatTensor, Any, Dict[str, np.ndarray]]:
         """Get the element at the given index.
 
         Args:
             idx: Query index
 
         Returns:
-            A list containing input Tensor, Output Tensor (Empty if test) and viz helpers. 
+            A list containing input Tensor, Output Tensor (Empty if test) and viz helpers.
 
         """
         return (
             torch.FloatTensor(self.input_data[idx]),
-            torch.empty(1) if self.mode == "test" else torch.FloatTensor(
-                self.output_data[idx]),
+            torch.empty(1)
+            if self.mode == "test"
+            else torch.FloatTensor(self.output_data[idx]),
             self.helpers[idx],
         )
 
@@ -79,68 +82,90 @@ class LSTMDataset(Dataset):
 
         """
         helper_df = self.data_dict[f"{self.mode}_helpers"]
-        candidate_centerlines = helper_df["CANDIDATE_CENTERLINES"].values
-        candidate_nt_distances = helper_df["CANDIDATE_NT_DISTANCES"].values
-        xcoord = np.stack(helper_df["FEATURES"].values
-                          )[:, :, config.FEATURE_FORMAT["X"]].astype("float")
-        ycoord = np.stack(helper_df["FEATURES"].values
-                          )[:, :, config.FEATURE_FORMAT["Y"]].astype("float")
+        xcoord = np.stack(helper_df["FEATURES"].values)[
+            :, :, config.FEATURE_FORMAT["X"]
+        ].astype("float")
+        ycoord = np.stack(helper_df["FEATURES"].values)[
+            :, :, config.FEATURE_FORMAT["Y"]
+        ].astype("float")
         centroids = np.stack((xcoord, ycoord), axis=2)
         _DEFAULT_HELPER_VALUE = np.full((centroids.shape[0]), None)
-        city_names = np.stack(helper_df["FEATURES"].values
-                              )[:, :, config.FEATURE_FORMAT["CITY_NAME"]]
-        seq_paths = helper_df["SEQUENCE"].values
-        translation = (helper_df["TRANSLATION"].values
-                       if self.args.normalize else _DEFAULT_HELPER_VALUE)
-        rotation = (helper_df["ROTATION"].values
-                    if self.args.normalize else _DEFAULT_HELPER_VALUE)
+
+        candidate_centerlines = _DEFAULT_HELPER_VALUE
+        candidate_nt_distances = _DEFAULT_HELPER_VALUE
+        city_names = np.stack(helper_df["FEATURES"].values)[
+            :, :, config.FEATURE_FORMAT["CITY_NAME"]
+        ]
+        seq_paths = _DEFAULT_HELPER_VALUE
+        translation = (
+            helper_df["TRANSLATION"].values
+            if self.args.normalize
+            else _DEFAULT_HELPER_VALUE
+        )
+        rotation = (
+            helper_df["ROTATION"].values
+            if self.args.normalize
+            else _DEFAULT_HELPER_VALUE
+        )
 
         use_candidates = self.args.use_map and self.mode == "test"
 
         candidate_delta_references = (
             helper_df["CANDIDATE_DELTA_REFERENCES"].values
-            if self.args.use_map and use_candidates else _DEFAULT_HELPER_VALUE)
-        delta_reference = (helper_df["DELTA_REFERENCE"].values
-                           if self.args.use_delta and not use_candidates else
-                           _DEFAULT_HELPER_VALUE)
+            if self.args.use_map and use_candidates
+            else _DEFAULT_HELPER_VALUE
+        )
+        delta_reference = (
+            helper_df["DELTA_REFERENCE"].values
+            if self.args.use_delta and not use_candidates
+            else _DEFAULT_HELPER_VALUE
+        )
 
         helpers = [None for i in range(len(config.LSTM_HELPER_DICT_IDX))]
 
         # Name of the variables should be the same as keys in LSTM_HELPER_DICT_IDX
-        for k, v in config.LSTM_HELPER_DICT_IDX.items():
-            helpers[v] = locals()[k.lower()]
+        helpers[config.LSTM_HELPER_DICT_IDX["CENTROIDS"]] = centroids
+        helpers[config.LSTM_HELPER_DICT_IDX["CITY_NAMES"]] = city_names
+        helpers[config.LSTM_HELPER_DICT_IDX["CANDIDATE_CENTERLINES"]] = candidate_centerlines
+        helpers[config.LSTM_HELPER_DICT_IDX["CANDIDATE_NT_DISTANCES"]] = candidate_nt_distances
+        helpers[config.LSTM_HELPER_DICT_IDX["TRANSLATION"]] = translation
+        helpers[config.LSTM_HELPER_DICT_IDX["ROTATION"]] = rotation
+        helpers[config.LSTM_HELPER_DICT_IDX["CANDIDATE_DELTA_REFERENCES"]] = candidate_delta_references
+        helpers[config.LSTM_HELPER_DICT_IDX["DELTA_REFERENCE"]] = delta_reference
+        helpers[config.LSTM_HELPER_DICT_IDX["SEQ_PATHS"]] = seq_paths
 
         return tuple(helpers)
 
 
 class ModelUtils:
     """Utils for LSTM baselines."""
+
     def save_checkpoint(self, save_dir: str, state: Dict[str, Any]) -> None:
         """Save checkpoint file.
-        
+
         Args:
             save_dir: Directory where model is to be saved
             state: State of the model
 
         """
-        filename = "{}/LSTM_rollout{}.pth.tar".format(save_dir,
-                                                      state["rollout_len"])
+        filename = "{}/LSTM_rollout{}.pth.tar".format(save_dir, state["rollout_len"])
         torch.save(state, filename)
 
     def load_checkpoint(
-            self,
-            checkpoint_file: str,
-            encoder: Any,
-            decoder: Any,
-            encoder_optimizer: Any,
-            decoder_optimizer: Any,
+        self,
+        checkpoint_file: str,
+        encoder: Any,
+        decoder: Any,
+        encoder_optimizer: Any,
+        decoder_optimizer: Any,
+        should_remove_module_prefix: bool = True,
     ) -> Tuple[int, int, float]:
         """Load the checkpoint.
 
         Args:
             checkpoint_file: Path to checkpoint file
             encoder: Encoder model
-            decoder: Decoder model 
+            decoder: Decoder model
 
         Returns:
             epoch: epoch when the model was saved.
@@ -148,6 +173,15 @@ class ModelUtils:
             best_loss: loss when the checkpoint was saved
 
         """
+        def remove_module_prefix(state_dict):
+            new_state_dict = {}
+            for key, value in state_dict.items():
+                new_key = key.replace('module.', '')
+                new_state_dict[new_key] = value
+            return new_state_dict
+
+        rem = remove_module_prefix if should_remove_module_prefix else lambda x: x
+
         if os.path.isfile(checkpoint_file):
             print("=> loading checkpoint '{}'".format(checkpoint_file))
             checkpoint = torch.load(checkpoint_file)
@@ -155,15 +189,13 @@ class ModelUtils:
             best_loss = checkpoint["best_loss"]
             rollout_len = checkpoint["rollout_len"]
             if use_cuda:
-                encoder.module.load_state_dict(
-                    checkpoint["encoder_state_dict"])
-                decoder.module.load_state_dict(
-                    checkpoint["decoder_state_dict"])
+                encoder.module.load_state_dict(rem(checkpoint["encoder_state_dict"]))
+                decoder.module.load_state_dict(rem(checkpoint["decoder_state_dict"]))
             else:
-                encoder.load_state_dict(checkpoint["encoder_state_dict"])
-                decoder.load_state_dict(checkpoint["decoder_state_dict"])
-            encoder_optimizer.load_state_dict(checkpoint["encoder_optimizer"])
-            decoder_optimizer.load_state_dict(checkpoint["decoder_optimizer"])
+                encoder.load_state_dict(rem(checkpoint["encoder_state_dict"]))
+                decoder.load_state_dict(rem(checkpoint["decoder_state_dict"]))
+            encoder_optimizer.load_state_dict(rem(checkpoint["encoder_optimizer"]))
+            decoder_optimizer.load_state_dict(rem(checkpoint["decoder_optimizer"]))
             print(
                 f"=> loaded checkpoint {checkpoint_file} (epoch: {epoch}, loss: {best_loss})"
             )
@@ -178,7 +210,7 @@ class ModelUtils:
         Args:
             batch: Batch data
 
-        Returns: 
+        Returns:
             input, output and helpers in the format expected by DataLoader
 
         """
@@ -192,8 +224,7 @@ class ModelUtils:
         output = torch.stack(output)
         return [_input, output, helpers]
 
-    def init_hidden(self, batch_size: int,
-                    hidden_size: int) -> Tuple[Any, Any]:
+    def init_hidden(self, batch_size: int, hidden_size: int) -> Tuple[Any, Any]:
         """Get initial hidden state for LSTM.
 
         Args:

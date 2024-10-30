@@ -7,23 +7,23 @@ import os
 import pickle as pkl
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from argoverse.map_representation.map_api import ArgoverseMap
-from joblib import Parallel, delayed
+# from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from shapely.geometry import Point, Polygon, LineString, LinearRing
 from shapely.affinity import affine_transform, rotate
 
-from utils.baseline_config import (
+from .baseline_config import (
     BASELINE_INPUT_FEATURES,
     BASELINE_OUTPUT_FEATURES,
     FEATURE_FORMAT,
 )
 
 
-def get_data(args: Any, baseline_key: str
-             ) -> Dict[str, Union[np.ndarray, pd.DataFrame, None]]:
+def get_data(
+    args: Any, baseline_key: str, feature_sequence: Optional[np.ndarray] = None
+) -> Dict[str, Union[np.ndarray, pd.DataFrame, None]]:
     """Load data from local data_dir.
 
     Args:
@@ -38,11 +38,8 @@ def get_data(args: Any, baseline_key: str
     if args.test_features:
         print("Loading Test data ...")
         test_input, test_output, test_df = load_and_preprocess_data(
-            input_features,
-            output_features,
-            args,
-            args.test_features,
-            mode="test")
+            input_features, output_features, args, feature_sequence, mode="test"
+        )
         print("Test Size: {}".format(test_input.shape[0]))
     else:
         test_input, test_output, test_df = [None] * 3
@@ -50,11 +47,8 @@ def get_data(args: Any, baseline_key: str
     if args.train_features:
         print("Loading Train data ...")
         train_input, train_output, train_df = load_and_preprocess_data(
-            input_features,
-            output_features,
-            args,
-            args.train_features,
-            mode="train")
+            input_features, output_features, args, args.train_features, mode="train"
+        )
         print("Train Size: {}".format(train_input.shape[0]))
     else:
         train_input, train_output, train_df = [None] * 3
@@ -62,11 +56,8 @@ def get_data(args: Any, baseline_key: str
     if args.val_features:
         print("Loading Val data ...")
         val_input, val_output, val_df = load_and_preprocess_data(
-            input_features,
-            output_features,
-            args,
-            args.val_features,
-            mode="val")
+            input_features, output_features, args, args.val_features, mode="val"
+        )
         print("Val Size: {}".format(val_input.shape[0]))
     else:
         val_input, val_output, val_df = [None] * 3
@@ -87,11 +78,11 @@ def get_data(args: Any, baseline_key: str
 
 
 def load_and_preprocess_data(
-        input_features: List[str],
-        output_features: List[str],
-        args: Any,
-        feature_file: str,
-        mode: str = "train",
+    input_features: List[str],
+    output_features: List[str],
+    args: Any,
+    feature_sequence: np.ndarray,
+    mode: str = "train",
 ) -> Tuple[np.ndarray, np.ndarray, pd.DataFrame]:
     """Load the data and preprocess based on given arguments.
 
@@ -103,24 +94,25 @@ def load_and_preprocess_data(
         mode (str): train/val/test
     Returns:
         _input: Input to the baseline
-        _output: Ground truth 
+        _output: Ground truth
         df: Helper values useful in visualization and evaluation
 
     """
-    df = pd.read_pickle(feature_file)
+    df = pd.DataFrame({"FEATURES": [feature_sequence]})
 
     # Normalize if its a non-map baseline
     if not args.use_map and args.normalize:
-
         print("Normalizing ...")
 
         # Don't use X,Y as features
         input_feature_idx = [
-            FEATURE_FORMAT[feature] for feature in input_features
+            FEATURE_FORMAT[feature]
+            for feature in input_features
             if feature != "X" and feature != "Y"
         ]
         output_feature_idx = [
-            FEATURE_FORMAT[feature] for feature in output_features
+            FEATURE_FORMAT[feature]
+            for feature in output_features
             if feature != "X" and feature != "Y"
         ]
 
@@ -128,38 +120,37 @@ def load_and_preprocess_data(
         normalized_traj_arr = get_normalized_traj(df, args)
 
         # Get other features
-        input_features_data = np.stack(
-            df["FEATURES"].values)[:, :, input_feature_idx].astype("float")
-        output_features_data = np.stack(
-            df["FEATURES"].values)[:, :, output_feature_idx].astype("float")
+        input_features_data = np.stack(df["FEATURES"].values)[
+            :, :, input_feature_idx
+        ].astype("float")
+        output_features_data = np.stack(df["FEATURES"].values)[
+            :, :, output_feature_idx
+        ].astype("float")
 
         # Merge normalized trajectory and other features
         input_features_data = np.concatenate(
-            (normalized_traj_arr, input_features_data), axis=2)
+            (normalized_traj_arr, input_features_data), axis=2
+        )
         output_features_data = np.concatenate(
-            (normalized_traj_arr, output_features_data), axis=2)
+            (normalized_traj_arr, output_features_data), axis=2
+        )
 
     else:
+        input_feature_idx = [FEATURE_FORMAT[feature] for feature in input_features]
+        output_feature_idx = [FEATURE_FORMAT[feature] for feature in output_features]
 
-        input_feature_idx = [
-            FEATURE_FORMAT[feature] for feature in input_features
-        ]
-        output_feature_idx = [
-            FEATURE_FORMAT[feature] for feature in output_features
-        ]
-
-        input_features_data = np.stack(
-            df["FEATURES"].values)[:, :, input_feature_idx].astype("float")
-        output_features_data = np.stack(
-            df["FEATURES"].values)[:, :, output_feature_idx].astype("float")
+        input_features_data = np.stack(df["FEATURES"].values)[
+            :, :, input_feature_idx
+        ].astype("float")
+        output_features_data = np.stack(df["FEATURES"].values)[
+            :, :, output_feature_idx
+        ].astype("float")
 
     # If using relative distance instead of absolute
     # Store the first coordinate (reference) of the trajectory to map it back to absolute values later
     if args.use_delta:
-
         # Get relative distances for all topk centerline candidates
         if args.use_map and mode == "test":
-
             print("Creating relative distances for candidate centerlines...")
 
             # Relative candidate distances nt
@@ -169,7 +160,8 @@ def load_and_preprocess_data(
                 curr_reference = []
                 for curr_candidate_nt in candidate_nt_dist_i:
                     curr_candidate_reference = get_relative_distance(
-                        np.expand_dims(curr_candidate_nt, 0), mode, args)
+                        np.expand_dims(curr_candidate_nt, 0), mode, args
+                    )
                     curr_candidate_nt = curr_candidate_nt.squeeze()
                     curr_reference.append(curr_candidate_reference.squeeze())
                 candidate_references.append(curr_reference)
@@ -177,7 +169,6 @@ def load_and_preprocess_data(
             df["CANDIDATE_DELTA_REFERENCES"] = candidate_references
 
         else:
-
             print("Creating relative distances...")
 
             # Relative features
@@ -186,18 +177,17 @@ def load_and_preprocess_data(
             df["DELTA_REFERENCE"] = reference.tolist()
 
     # Set train and test input/output data
-    _input = input_features_data[:, :args.obs_len]
+    _input = input_features_data[:, : args.obs_len]
 
     if mode == "test":
         _output = None
     else:
-        _output = output_features_data[:, args.obs_len:]
+        _output = output_features_data[:, args.obs_len :]
 
     return _input, _output, df
 
 
-def get_relative_distance(data: np.ndarray, mode: str,
-                          args: Any) -> np.ndarray:
+def get_relative_distance(data: np.ndarray, mode: str, args: Any) -> np.ndarray:
     """Convert absolute distance to relative distance in place and return the reference (first value).
 
     Args:
@@ -221,8 +211,7 @@ def get_relative_distance(data: np.ndarray, mode: str,
     return reference
 
 
-def get_xy_from_nt_seq(nt_seq: np.ndarray,
-                       centerlines: List[np.ndarray]) -> np.ndarray:
+def get_xy_from_nt_seq(nt_seq: np.ndarray, centerlines: List[np.ndarray]) -> np.ndarray:
     """Convert n-t coordinates to x-y, i.e., convert from centerline curvilinear coordinates to map coordinates.
 
     Args:
@@ -240,20 +229,17 @@ def get_xy_from_nt_seq(nt_seq: np.ndarray,
         curr_cl = centerlines[i]
         line_string = LineString(curr_cl)
         for time in range(seq_len):
-
             # Project nt to xy
             offset_from_cl = nt_seq[i][time][0]
             dist_along_cl = nt_seq[i][time][1]
-            x_coord, y_coord = get_xy_from_nt(offset_from_cl, dist_along_cl,
-                                              curr_cl)
+            x_coord, y_coord = get_xy_from_nt(offset_from_cl, dist_along_cl, curr_cl)
             xy_seq[i, time, 0] = x_coord
             xy_seq[i, time, 1] = y_coord
 
     return xy_seq
 
 
-def get_xy_from_nt(n: float, t: float,
-                   centerline: np.ndarray) -> Tuple[float, float]:
+def get_xy_from_nt(n: float, t: float, centerline: np.ndarray) -> Tuple[float, float]:
     """Convert a single n-t coordinate (centerline curvilinear coordinate) to absolute x-y.
 
     Args:
@@ -268,8 +254,7 @@ def get_xy_from_nt(n: float, t: float,
     line_string = LineString(centerline)
 
     # If distance along centerline is negative, keep it to the start of line
-    point_on_cl = line_string.interpolate(
-        t) if t > 0 else line_string.interpolate(0)
+    point_on_cl = line_string.interpolate(t) if t > 0 else line_string.interpolate(0)
     local_ls = None
 
     # Find 2 consective points on centerline such that line joining those 2 points
@@ -283,7 +268,8 @@ def get_xy_from_nt(n: float, t: float,
             break
 
     assert local_ls is not None, "XY from N({}) T({}) not computed correctly".format(
-        n, t)
+        n, t
+    )
 
     pt1, pt2 = local_ls.coords[:]
     x0, y0 = point_on_cl.coords[0]
@@ -336,13 +322,13 @@ def get_xy_from_nt(n: float, t: float,
 
 
 def viz_predictions(
-        input_: np.ndarray,
-        output: np.ndarray,
-        target: np.ndarray,
-        centerlines: np.ndarray,
-        city_names: np.ndarray,
-        idx=None,
-        show: bool = True,
+    input_: np.ndarray,
+    output: np.ndarray,
+    target: np.ndarray,
+    centerlines: np.ndarray,
+    city_names: np.ndarray,
+    idx=None,
+    show: bool = True,
 ) -> None:
     """Visualize predicted trjectories.
 
@@ -476,7 +462,7 @@ def get_normalized_traj(df: pd.DataFrame, args: Any) -> np.ndarray:
         df (pandas Dataframe): Data for all the tracks
         args: Arguments passed to the baseline code
     Returns:
-        normalize_traj_arr (numpy array): Array of shape (num_tracks x seq_len x 2) 
+        normalize_traj_arr (numpy array): Array of shape (num_tracks x seq_len x 2)
                                           containing normalized trajectory
     Note:
         This also updates the dataframe in-place.
@@ -534,15 +520,15 @@ def get_normalized_traj(df: pd.DataFrame, args: Any) -> np.ndarray:
     return normalize_traj_arr
 
 
-def normalized_to_map_coordinates(coords: np.ndarray,
-                                  translation: List[List[float]],
-                                  rotation: List[float]) -> np.ndarray:
+def normalized_to_map_coordinates(
+    coords: np.ndarray, translation: List[List[float]], rotation: List[float]
+) -> np.ndarray:
     """Denormalize trajectory to bring it back to map frame.
 
     Args:
         coords (numpy array): Array of shape (num_tracks x seq_len x 2) containing normalized coordinates
         translation (list): Translation matrix used in normalizing trajectories
-        rotation (list): Rotation angle used in normalizing trajectories 
+        rotation (list): Rotation angle used in normalizing trajectories
     Returns:
         _ (numpy array: Array of shape (num_tracks x seq_len x 2) containing coordinates in map frame
 
@@ -564,11 +550,11 @@ def normalized_to_map_coordinates(coords: np.ndarray,
 
 
 def get_abs_traj(
-        input_: np.ndarray,
-        output: np.ndarray,
-        args: Any,
-        helpers: Dict[str, Any],
-        start_idx: int = None,
+    input_: np.ndarray,
+    output: np.ndarray,
+    args: Any,
+    helpers: Dict[str, Any],
+    start_idx: int = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Get absolute trajectory reverting all the transformations.
 
@@ -578,7 +564,7 @@ def get_abs_traj(
         args (Argparse): Config parameters
         helpers (dict):Data helpers
         start_id (int): Start index of the current batch (used in joblib). If None, then no batching.
-    Returns:            
+    Returns:
         input_ (numpy array): Input Trajectory in map frame with shape (num_tracks x obs_len x 2)
         output (numpy array): Predicted Trajectory in map frame with shape (num_tracks x pred_len x 2)
 
@@ -619,23 +605,25 @@ def get_abs_traj(
         translation = helpers["TRANSLATION"].copy()[s:e]
         rotation = helpers["ROTATION"].copy()[s:e]
         input_[:, :, :2] = normalized_to_map_coordinates(
-            input_[:, :, :2], translation, rotation)
+            input_[:, :, :2], translation, rotation
+        )
         output[:, :, :2] = normalized_to_map_coordinates(
-            output[:, :, :2], translation, rotation)
+            output[:, :, :2], translation, rotation
+        )
     return input_, output
 
 
 def get_model(
-        regressor: Any,
-        train_input: np.ndarray,
-        train_output: np.ndarray,
-        args: Any,
-        pred_horizon: int,
+    regressor: Any,
+    train_input: np.ndarray,
+    train_output: np.ndarray,
+    args: Any,
+    pred_horizon: int,
 ) -> Any:
     """Get the trained model after running grid search or load a saved one.
 
     Args:
-        regressor: Nearest Neighbor regressor class instance 
+        regressor: Nearest Neighbor regressor class instance
         train_input: Input to the model
         train_output: Ground truth for the model
         args: Arguments passed to the baseline
@@ -647,19 +635,18 @@ def get_model(
     """
     # Load model
     if args.test:
-
         # Load a trained model
         with open(args.model_path, "rb") as f:
             grid_search = pkl.load(f)
         print(f"## Loaded {args.model_path} ....")
 
     else:
-
         train_num_tracks = train_input.shape[0]
 
         # Flatten to (num_tracks x feature_size)
         train_output_curr = train_output[:, :pred_horizon, :].reshape(
-            (train_num_tracks, pred_horizon * 2), order="F")
+            (train_num_tracks, pred_horizon * 2), order="F"
+        )
 
         # Run grid search for hyper parameter tuning
         grid_search = regressor.run_grid_search(train_input, train_output_curr)
@@ -693,8 +680,8 @@ def merge_saved_traj(batched_dir: str, merged_file_path: str):
 
 
 def get_test_data_dict_subset(
-        data_dict: Dict[str, Union[np.ndarray, None]],
-        args: Any) -> Dict[int, Dict[str, Union[np.ndarray, None]]]:
+    data_dict: Dict[str, Union[np.ndarray, None]], args: Any
+) -> Dict[int, Dict[str, Union[np.ndarray, None]]]:
     """Get test subset from data dict. Useful when used with joblib as we don't need to pass the entire data_dict to all the batches.
 
     Args:
@@ -712,7 +699,7 @@ def get_test_data_dict_subset(
         new_dict = {}
         for k, v in data_dict.items():
             if k in ["test_input", "test_helpers"]:
-                new_dict[k] = v[i:i + args.joblib_batch_size]
+                new_dict[k] = v[i : i + args.joblib_batch_size]
         test_data_dict_batches[i] = new_dict
     return test_data_dict_batches
 
@@ -729,9 +716,7 @@ def validate_args(args: Any) -> bool:
     """
     success = True
     if args.normalize and args.use_map:
-        print(
-            "[ARGS ERROR]: normalize and use_map cannot be used simultaneously."
-        )
+        print("[ARGS ERROR]: normalize and use_map cannot be used simultaneously.")
         success = False
     if args.use_social and args.use_map:
         print(

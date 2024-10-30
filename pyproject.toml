@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "argoverse-forecasting"
+version = "0.1.0"
+description = ""
+authors = ["aloysiogl <aloysiogl@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "~3.8"
+joblib = "0.13.2"
+matplotlib = "3.7.5"
+typing = "3.7.4.1"
+setuptools = "41.0.1"
+termcolor = "1.1.0"
+pandas = "1.4.4"
+Shapely = "2.0.6"
+numpy = "1.24.4"
+# tensorflow = "2.7"
+torch = "1.13"
+scikit-learn = "1.0.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
