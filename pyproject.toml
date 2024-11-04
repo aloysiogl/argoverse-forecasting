@@ -7,7 +7,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-joblib = "0.13.2"
+# joblib = "0.13.2"
 matplotlib = "3.7.5"
 typing = "3.7.4.1"
 setuptools = "41.0.1"

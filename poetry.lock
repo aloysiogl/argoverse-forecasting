@@ -182,17 +182,6 @@ unicode = ["unicodedata2 (>=15.1.0)"]
 woff = ["brotli (>=1.0.1)", "brotlicffi (>=0.8.0)", "zopfli (>=0.1.4)"]
 
 [[package]]
-name = "joblib"
-version = "0.13.2"
-description = "Lightweight pipelining: using Python functions as pipeline jobs."
-optional = false
-python-versions = "*"
-files = [
-    {file = "joblib-0.13.2-py2.py3-none-any.whl", hash = "sha256:21e0c34a69ad7fde4f2b1f3402290e9ec46f545f15f1541c582edfe05d87b63a"},
-    {file = "joblib-0.13.2.tar.gz", hash = "sha256:315d6b19643ec4afd4c41c671f9f2d65ea9d787da093487a81ead7b0bac94524"},
-]
-
-[[package]]
 name = "kiwisolver"
 version = "1.4.7"
 description = "A fast implementation of the Cassowary constraint solver"
@@ -868,4 +857,4 @@ test = ["pytest (>=6.0.0)", "setuptools (>=65)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "b0c2bd66371ebfa384eff917e8a9c54699e431bdb13890923c4e0bcbf73c6d9b"
+content-hash = "802c0a8d02fe8d9dc32eb71cf7498311176947997b9faf87d987b7507d5e0b80"
