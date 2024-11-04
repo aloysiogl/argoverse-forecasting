@@ -1,18 +1,18 @@
 """This module contains utility functions for all the baselines."""
 
-from collections import OrderedDict
 import copy
 import math
 import os
 import pickle as pkl
+from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 # from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from shapely.geometry import Point, Polygon, LineString, LinearRing
 from shapely.affinity import affine_transform, rotate
+from shapely.geometry import LinearRing, LineString
 
 from .baseline_config import (
     BASELINE_INPUT_FEATURES,
@@ -22,7 +22,7 @@ from .baseline_config import (
 
 
 def get_data(
-    args: Any, baseline_key: str, feature_sequence: Optional[np.ndarray] = None
+    args: Any, baseline_key: str, feature_sequence: Optional[np.ndarray] = None, verbose: bool = False
 ) -> Dict[str, Union[np.ndarray, pd.DataFrame, None]]:
     """Load data from local data_dir.
 
@@ -36,29 +36,35 @@ def get_data(
     input_features = BASELINE_INPUT_FEATURES[baseline_key]
     output_features = BASELINE_OUTPUT_FEATURES[baseline_key]
     if args.test_features:
-        print("Loading Test data ...")
+        if verbose:
+            print("Loading Test data ...")
         test_input, test_output, test_df = load_and_preprocess_data(
             input_features, output_features, args, feature_sequence, mode="test"
         )
-        print("Test Size: {}".format(test_input.shape[0]))
+        if verbose:
+            print("Test Size: {}".format(test_input.shape[0]))
     else:
         test_input, test_output, test_df = [None] * 3
 
     if args.train_features:
-        print("Loading Train data ...")
+        if verbose:
+            print("Loading Train data ...")
         train_input, train_output, train_df = load_and_preprocess_data(
             input_features, output_features, args, args.train_features, mode="train"
         )
-        print("Train Size: {}".format(train_input.shape[0]))
+        if verbose:
+            print("Train Size: {}".format(train_input.shape[0]))
     else:
         train_input, train_output, train_df = [None] * 3
 
     if args.val_features:
-        print("Loading Val data ...")
+        if verbose:
+            print("Loading Val data ...")
         val_input, val_output, val_df = load_and_preprocess_data(
             input_features, output_features, args, args.val_features, mode="val"
         )
-        print("Val Size: {}".format(val_input.shape[0]))
+        if verbose:
+            print("Val Size: {}".format(val_input.shape[0]))
     else:
         val_input, val_output, val_df = [None] * 3
 
@@ -83,6 +89,7 @@ def load_and_preprocess_data(
     args: Any,
     feature_sequence: np.ndarray,
     mode: str = "train",
+    verbose: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, pd.DataFrame]:
     """Load the data and preprocess based on given arguments.
 
@@ -102,7 +109,8 @@ def load_and_preprocess_data(
 
     # Normalize if its a non-map baseline
     if not args.use_map and args.normalize:
-        print("Normalizing ...")
+        if verbose:
+            print("Normalizing ...")
 
         # Don't use X,Y as features
         input_feature_idx = [
@@ -151,7 +159,8 @@ def load_and_preprocess_data(
     if args.use_delta:
         # Get relative distances for all topk centerline candidates
         if args.use_map and mode == "test":
-            print("Creating relative distances for candidate centerlines...")
+            if verbose:
+                print("Creating relative distances for candidate centerlines...")
 
             # Relative candidate distances nt
             candidate_nt_distances = df["CANDIDATE_NT_DISTANCES"].values
@@ -169,7 +178,8 @@ def load_and_preprocess_data(
             df["CANDIDATE_DELTA_REFERENCES"] = candidate_references
 
         else:
-            print("Creating relative distances...")
+            if verbose:
+                print("Creating relative distances...")
 
             # Relative features
             reference = get_relative_distance(input_features_data, mode, args)

@@ -1,5 +1,6 @@
 import os
 from typing import Any, Dict
+from tqdm import tqdm
 
 import numpy as np
 import torch
@@ -91,6 +92,7 @@ def infer_single_none(
     decoder: DecoderRNN,
     model_utils: ModelUtils,
     args: Any,
+    verbose: bool = False,
 ):
     """Inference on dataset of single trajectory.
 
@@ -111,9 +113,10 @@ def infer_single_none(
         collate_fn=model_utils.my_collate_fn,
     )
 
-    print(
-        f"#### LSTM+social inference at {start_idx} ####"
-    ) if args.use_social else print(f"#### LSTM inference at {start_idx} ####")
+    if verbose:
+        print(
+            f"#### LSTM+social inference at {start_idx} ####"
+        ) if args.use_social else print(f"#### LSTM inference at {start_idx} ####")
     return infer_absolute(
         curr_test_loader,
         encoder,
@@ -219,6 +222,7 @@ def infer_absolute(
 
 class LSTMForecaster:
     def __init__(self, model_path: str, obs_len: int = 20, pred_len: int = 30):
+        print("Loading LSTM Forecaster")
         self.args = type(
             "",
             (),
@@ -297,4 +301,18 @@ class LSTMForecaster:
         return infer_single_none(
             data_dict, 0, self.encoder, self.decoder, self.model_utils, self.args
         )
+    
+    def predict_multiple(self, trajectories: np.ndarray) -> np.ndarray:
+        """
+        Given numpy array of multiple trajectories, predict the future trajectories of each.
 
+        Input shape: (n_trajectories, full_horizon, 2)
+        Output shape: (n_trajectories, pred_horizon, 2)
+        """
+
+        output = np.zeros((trajectories.shape[0], self.args.pred_len, 2))
+
+        for i in tqdm(range(trajectories.shape[0])):
+            output[i] = self.predict(trajectories[i])
+
+        return output
